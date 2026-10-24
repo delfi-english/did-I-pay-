@@ -1,0 +1,1457 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#0f172a" id="meta-theme-color">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Mis Pagos">
+    <!-- Inline SVG App Icon & Manifest for "Agregar a pantalla de inicio" -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='24' fill='%234f46e5'/%3E%3Cpath d='M30 52l14 14 28-28' stroke='%23ffffff' stroke-width='10' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+    <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='24' fill='%234f46e5'/%3E%3Cpath d='M30 52l14 14 28-28' stroke='%23ffffff' stroke-width='10' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+    <title>Mis Pagos del Mes</title>
+
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Google Fonts: Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <style>
+        * {
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+        }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            overscroll-behavior-y: none;
+            min-height: 100dvh;
+        }
+        /* Safe Area Padding para iPhone y Android modernos */
+        .pt-safe { padding-top: max(0.85rem, env(safe-area-inset-top)); }
+        .pb-safe-nav { padding-bottom: max(0.6rem, env(safe-area-inset-bottom)); }
+        .pb-safe-sheet { padding-bottom: max(1.75rem, env(safe-area-inset-bottom)); }
+
+        /* Evitar auto-zoom en iOS Safari al enfocar inputs (mínimo 16px) */
+        input, select, textarea {
+            font-size: 16px !important;
+        }
+
+        /* Animación de Bottom Sheet nativa */
+        .sheet-backdrop {
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .sheet-backdrop.open {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .bottom-sheet {
+            transform: translateY(100%);
+            transition: transform 0.32s cubic-bezier(0.32, 0.72, 0, 1);
+        }
+        .sheet-backdrop.open .bottom-sheet {
+            transform: translateY(0);
+        }
+
+        /* Ocultar barra de scroll horizontal en pills */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* Quitar flechas de inputs numéricos */
+        input[type=number]::-webkit-inner-spin-button, 
+        input[type=number]::-webkit-outer-spin-button { 
+            -webkit-appearance: none; 
+            margin: 0; 
+        }
+
+        /* Animación sutil para alertas de fecha ideal */
+        @keyframes soft-pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.72; }
+        }
+        .animate-soft-pulse {
+            animation: soft-pulse 2.2s infinite ease-in-out;
+        }
+    </style>
+</head>
+<body class="bg-slate-200 dark:bg-black text-slate-900 dark:text-slate-100 select-none overflow-x-hidden">
+
+    <!-- Contenedor Móvil (480px máx centrado en PC, 100% full-bleed en celular) -->
+    <div class="max-w-[480px] mx-auto min-h-[100dvh] flex flex-col bg-slate-50 dark:bg-slate-950 shadow-2xl relative pb-28">
+
+        <!-- Toast Flotante Superior -->
+        <div id="toast-container" class="fixed top-4 inset-x-4 max-w-[440px] mx-auto z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+        <!-- Banner de Nuevo Mes Detectado -->
+        <div id="new-month-banner" class="hidden bg-indigo-600 text-white px-4 py-3.5 shadow-md">
+            <div class="flex items-start justify-between gap-3">
+                <div class="flex items-center gap-2.5">
+                    <i data-lucide="Sparkles" class="w-5 h-5 shrink-0 text-amber-300"></i>
+                    <p class="text-xs font-medium leading-relaxed">
+                        <strong>¡Arrancó un nuevo mes!</strong> Guardamos tus pagos anteriores en el Historial y reiniciamos la lista para este mes.
+                    </p>
+                </div>
+                <button onclick="closeNewMonthBanner()" class="text-indigo-200 hover:text-white p-1.5 rounded-xl shrink-0">
+                    <i data-lucide="X" class="w-5 h-5"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- ==========================================
+             HEADER STICKY MOBILE-FIRST
+             ========================================== -->
+        <header class="sticky top-0 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800/80 px-4 pt-safe pb-3 transition-colors">
+            <!-- Fila Superior: Mes actual + Simulador de Día + Tema -->
+            <div class="flex items-center justify-between gap-2 mb-3">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-11 h-11 rounded-2xl bg-indigo-600 flex items-center justify-center text-white shadow-md shadow-indigo-500/25 shrink-0">
+                        <i data-lucide="CalendarCheck2" class="w-6 h-6"></i>
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-1.5">
+                            <h1 id="header-month-title" class="text-lg font-extrabold tracking-tight capitalize">Mes Actual</h1>
+                            <span id="sim-badge" onclick="resetSimulatedDay()" class="hidden text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-500 border border-amber-500/30 cursor-pointer">Día Simulado ✕</span>
+                        </div>
+                        <p id="current-date-display" class="text-xs text-slate-500 dark:text-slate-400 font-medium">Cargando fecha...</p>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-1.5">
+                    <button onclick="toggleTheme()" aria-label="Cambiar tema" class="w-11 h-11 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-100/80 dark:bg-slate-800/70 flex items-center justify-center text-slate-600 dark:text-slate-300 active:scale-95 transition">
+                        <i id="theme-icon" data-lucide="Sun" class="w-5 h-5"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Tarjeta Compacta de Progreso del Mes (Solo visible en vista Mis Pagos) -->
+            <div id="header-progress-card" class="bg-slate-100/90 dark:bg-slate-800/60 rounded-2xl p-3.5 border border-slate-200/70 dark:border-slate-800">
+                <div class="flex items-center justify-between text-xs mb-2">
+                    <span id="progress-title" class="font-bold text-slate-700 dark:text-slate-200">0 de 0 saldados</span>
+                    <div class="flex items-center gap-2">
+                        <span id="total-spent-display" class="text-slate-500 dark:text-slate-400 font-semibold">$0</span>
+                        <span id="progress-percentage" class="font-extrabold text-indigo-600 dark:text-indigo-400 bg-indigo-500/15 px-2.5 py-0.5 rounded-full">0%</span>
+                    </div>
+                </div>
+                <div class="w-full h-2.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                    <div id="progress-bar" class="h-full bg-gradient-to-r from-indigo-500 to-emerald-500 transition-all duration-500 rounded-full" style="width: 0%"></div>
+                </div>
+                <p id="urgent-counter" class="text-xs text-slate-500 dark:text-slate-400 mt-2 font-medium flex items-center gap-1.5">
+                    Revisando vencimientos...
+                </p>
+            </div>
+
+            <!-- Píldoras de Filtro Rápido (Solo visible en vista Mis Pagos) -->
+            <div id="header-filter-pills" class="flex items-center gap-2 mt-3 overflow-x-auto no-scrollbar">
+                <button onclick="setFilter('all')" id="tab-all" class="flex-1 min-h-[42px] px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 whitespace-nowrap">
+                    <span>Todos</span>
+                    <span id="count-all" class="px-1.5 py-0.5 rounded-md text-[11px]">0</span>
+                </button>
+                <button onclick="setFilter('pending')" id="tab-pending" class="flex-1 min-h-[42px] px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 whitespace-nowrap">
+                    <span>Pendientes</span>
+                    <span id="count-pending" class="px-1.5 py-0.5 rounded-md text-[11px]">0</span>
+                </button>
+                <button onclick="setFilter('paid')" id="tab-paid" class="flex-1 min-h-[42px] px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 whitespace-nowrap">
+                    <span>Pagados</span>
+                    <span id="count-paid" class="px-1.5 py-0.5 rounded-md text-[11px]">0</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- ==========================================
+             VISTA 1: MIS PAGOS DEL MES (CHECKLIST)
+             ========================================== -->
+        <main id="view-pagos" class="flex-1 px-4 pt-4 space-y-3.5">
+            <!-- Lista de Tarjetas -->
+            <div id="services-grid" class="space-y-3.5"></div>
+
+            <!-- Estado Vacío -->
+            <div id="empty-state" class="hidden bg-white dark:bg-slate-900 border border-dashed border-slate-300 dark:border-slate-800 rounded-3xl p-8 text-center my-6">
+                <div class="w-14 h-14 rounded-2xl bg-indigo-500/10 text-indigo-500 flex items-center justify-center mx-auto mb-3">
+                    <i data-lucide="CheckCircle2" class="w-7 h-7"></i>
+                </div>
+                <h3 id="empty-state-title" class="text-base font-bold text-slate-800 dark:text-slate-100">¡Todo al día!</h3>
+                <p id="empty-state-desc" class="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+                    No hay pagos en esta vista. Tocá el botón <strong>+ Nuevo</strong> abajo en el centro si querés agregar otro servicio mensual.
+                </p>
+            </div>
+        </main>
+
+        <!-- ==========================================
+             VISTA 2: HISTORIAL DE MESES ANTERIORES
+             ========================================== -->
+        <section id="view-historial" class="hidden flex-1 px-4 pt-4 space-y-4">
+            <div class="bg-indigo-600/10 dark:bg-indigo-500/10 border border-indigo-500/20 rounded-2xl p-4 flex items-start gap-3">
+                <i data-lucide="History" class="w-5 h-5 text-indigo-500 shrink-0 mt-0.5"></i>
+                <p class="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                    Cada vez que empieza un mes nuevo, tus pagos registrados se guardan automáticamente acá y las tarjetas vuelven a quedar pendientes.
+                </p>
+            </div>
+
+            <div id="history-list" class="space-y-3"></div>
+        </section>
+
+        <!-- ==========================================
+             VISTA 3: AJUSTES / DATOS
+             ========================================== -->
+        <section id="view-ajustes" class="hidden flex-1 px-4 pt-4 space-y-4">
+            
+            <!-- Simulador de Día del Mes para probar alertas -->
+            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 shadow-xs space-y-3">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-10 h-10 rounded-2xl bg-indigo-500/15 text-indigo-500 flex items-center justify-center shrink-0">
+                            <i data-lucide="Sliders" class="w-5 h-5"></i>
+                        </div>
+                        <div>
+                            <h3 class="text-sm font-bold">Probar Alertas por Día</h3>
+                            <p class="text-xs text-slate-500 dark:text-slate-400">Simulá qué día del mes es hoy</p>
+                        </div>
+                    </div>
+                    <span id="sim-day-label" class="text-xs font-extrabold px-2.5 py-1 rounded-xl bg-slate-100 dark:bg-slate-800 text-indigo-500">Hoy real</span>
+                </div>
+                <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                    Mové la barra para ver cómo te avisa la app el día 2 (Natación), el 13 (Ingresos Brutos) o el 16 (fecha ideal para Monotributo antes del 20):
+                </p>
+                <div class="pt-1">
+                    <input type="range" id="sim-day-slider" min="1" max="31" value="1" oninput="changeSimulatedDay(this.value)" class="w-full accent-indigo-600 h-2 bg-slate-200 dark:bg-slate-800 rounded-lg cursor-pointer">
+                    <div class="flex justify-between text-[11px] text-slate-400 font-semibold mt-1">
+                        <span>Día 1</span>
+                        <span>Día 10</span>
+                        <span>Día 16</span>
+                        <span>Día 20</span>
+                        <span>Día 31</span>
+                    </div>
+                </div>
+                <button onclick="resetSimulatedDay()" class="w-full min-h-[44px] rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-bold text-slate-600 dark:text-slate-300 active:scale-95 transition">
+                    Volver al día de hoy real
+                </button>
+            </div>
+
+            <!-- Tarjeta Simulador de Cambio de Mes -->
+            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 shadow-xs space-y-3">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-10 h-10 rounded-2xl bg-amber-500/15 text-amber-500 flex items-center justify-center shrink-0">
+                        <i data-lucide="CalendarSync" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-bold">Cerrar Mes y Empezar Nuevo</h3>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Archiva los pagos actuales y reinicia la lista</p>
+                    </div>
+                </div>
+                <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                    La app reinicia el mes automáticamente el día 1. Si querés probar ahora cómo guarda todo en el Historial y limpia las tarjetas, tocá acá:
+                </p>
+                <button onclick="openResetConfirmSheet()" class="w-full min-h-[48px] px-4 py-3 rounded-2xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-600 dark:text-amber-400 border border-amber-500/30 font-bold text-xs flex items-center justify-center gap-2 active:scale-[0.99] transition">
+                    <i data-lucide="RotateCcw" class="w-4 h-4"></i>
+                    <span>Archivar mes actual y reiniciar pagos</span>
+                </button>
+            </div>
+
+            <!-- Tarjeta Copia de Seguridad (Exportar / Importar) -->
+            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 shadow-xs space-y-3">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-10 h-10 rounded-2xl bg-emerald-500/15 text-emerald-500 flex items-center justify-center shrink-0">
+                        <i data-lucide="Database" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-bold">Copia de Seguridad (Backup)</h3>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Tus datos se guardan en este celular</p>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 gap-2.5 pt-1">
+                    <button onclick="exportDataJSON()" class="w-full min-h-[48px] px-4 py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-sm active:scale-[0.99] transition">
+                        <i data-lucide="Download" class="w-4 h-4"></i>
+                        <span>Guardar respaldo en el celu (.json)</span>
+                    </button>
+
+                    <label class="w-full min-h-[48px] px-4 py-3 rounded-2xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 font-bold text-xs flex items-center justify-center gap-2 cursor-pointer active:scale-[0.99] transition">
+                        <i data-lucide="Upload" class="w-4 h-4 text-indigo-500"></i>
+                        <span>Restaurar respaldo (.json)</span>
+                        <input type="file" accept=".json" onchange="importDataJSON(event)" class="hidden">
+                    </label>
+                </div>
+            </div>
+
+            <!-- Tip Agregar a Pantalla de Inicio -->
+            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 shadow-xs space-y-2">
+                <div class="flex items-center gap-2 text-xs font-bold text-slate-800 dark:text-slate-100">
+                    <i data-lucide="Smartphone" class="w-4 h-4 text-indigo-500"></i>
+                    <span>Cómo tenerla como App en tu pantalla</span>
+                </div>
+                <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                    Abriendo este archivo en el navegador del celular (o subiéndolo gratis a <em>GitHub Pages</em> o <em>Netlify Drop</em>), tocá el menú <strong>⋮</strong> en Chrome o <strong>Compartir</strong> en Safari y elegí <strong>"Agregar a la pantalla de inicio"</strong>. Se abrirá a pantalla completa igual que una app instalada.
+                </p>
+            </div>
+        </section>
+
+        <!-- ==========================================
+             BARRA DE NAVEGACIÓN INFERIOR (THUMB-FRIENDLY)
+             ========================================== -->
+        <nav class="fixed bottom-0 inset-x-0 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-lg border-t border-slate-200 dark:border-slate-800 pb-safe-nav">
+            <div class="max-w-[480px] mx-auto px-3 pt-1.5 flex items-center justify-around relative">
+                
+                <!-- Tab 1: Mis Pagos -->
+                <button onclick="switchMainView('pagos')" id="nav-pagos" class="flex-1 min-h-[50px] py-1 flex flex-col items-center justify-center gap-1 text-indigo-600 dark:text-indigo-400 active:scale-95 transition">
+                    <i data-lucide="CheckSquare" class="w-5 h-5"></i>
+                    <span class="text-[11px] font-bold">Mis Pagos</span>
+                </button>
+
+                <!-- Botón Central Flotante (+ Nuevo Servicio) -->
+                <div class="px-2 -mt-6">
+                    <button onclick="openServiceSheet()" class="h-14 px-5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs shadow-lg shadow-indigo-600/35 flex items-center justify-center gap-1.5 active:scale-95 transition">
+                        <i data-lucide="Plus" class="w-5 h-5"></i>
+                        <span>Nuevo</span>
+                    </button>
+                </div>
+
+                <!-- Tab 2: Historial -->
+                <button onclick="switchMainView('historial')" id="nav-historial" class="flex-1 min-h-[50px] py-1 flex flex-col items-center justify-center gap-1 text-slate-400 dark:text-slate-500 active:scale-95 transition relative">
+                    <i data-lucide="History" class="w-5 h-5"></i>
+                    <span class="text-[11px] font-semibold">Historial</span>
+                    <span id="history-badge-dot" class="hidden w-2 h-2 rounded-full bg-indigo-500 absolute top-1.5 right-1/3"></span>
+                </button>
+
+                <!-- Tab 3: Ajustes / Datos -->
+                <button onclick="switchMainView('ajustes')" id="nav-ajustes" class="flex-1 min-h-[50px] py-1 flex flex-col items-center justify-center gap-1 text-slate-400 dark:text-slate-500 active:scale-95 transition">
+                    <i data-lucide="SlidersHorizontal" class="w-5 h-5"></i>
+                    <span class="text-[11px] font-semibold">Ajustes</span>
+                </button>
+            </div>
+        </nav>
+
+    </div>
+
+    <!-- ==========================================
+         BOTTOM SHEET 1: ANOTAR PAGO CON DETALLE
+         ========================================== -->
+    <div id="pay-sheet-backdrop" onclick="handleBackdropClick(event, 'pay-sheet-backdrop')" class="sheet-backdrop fixed inset-0 bg-slate-950/60 backdrop-blur-xs z-50 flex items-end justify-center">
+        <div class="bottom-sheet bg-white dark:bg-slate-900 w-full max-w-[480px] rounded-t-3xl border-t border-slate-200 dark:border-slate-800 px-5 pt-3 pb-safe-sheet shadow-2xl max-h-[90dvh] overflow-y-auto">
+            <!-- Handle bar -->
+            <div class="w-12 h-1.5 bg-slate-300 dark:bg-slate-700 rounded-full mx-auto mb-4"></div>
+
+            <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-11 h-11 rounded-2xl bg-emerald-500/15 text-emerald-500 flex items-center justify-center shrink-0">
+                        <i data-lucide="CheckCircle2" class="w-6 h-6"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-base font-extrabold">Registrar Pago</h3>
+                        <p id="pay-sheet-service-name" class="text-xs text-slate-500 dark:text-slate-400 font-semibold"></p>
+                    </div>
+                </div>
+                <button onclick="closeSheet('pay-sheet-backdrop')" class="w-11 h-11 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 active:scale-95">
+                    <i data-lucide="X" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <form id="pay-form" onsubmit="confirmPayment(event)" class="space-y-4">
+                <input type="hidden" id="pay-service-id">
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1.5">¿Qué día pagaste?</label>
+                        <input type="date" id="pay-date-input" required class="w-full min-h-[48px] px-3 py-2.5 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1.5">Monto ($ ARS)</label>
+                        <div class="relative">
+                            <span class="absolute left-3.5 top-3.5 text-slate-400 font-bold">$</span>
+                            <input type="number" step="0.01" inputmode="decimal" id="pay-amount-input" placeholder="Opcional" class="w-full min-h-[48px] pl-8 pr-3 py-2.5 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Píldoras rápidas de medio de pago -->
+                <div>
+                    <label class="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-2">Medio de pago / Comprobante (Tocá para elegir)</label>
+                    <div class="flex flex-wrap gap-2 mb-2.5">
+                        <button type="button" onclick="selectPaymentMethodChip('VEP / ARCA')" class="min-h-[38px] px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 active:bg-indigo-500/20 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 transition">VEP / ARCA</button>
+                        <button type="button" onclick="selectPaymentMethodChip('MercadoPago')" class="min-h-[38px] px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 active:bg-indigo-500/20 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 transition">MercadoPago</button>
+                        <button type="button" onclick="selectPaymentMethodChip('Brubank')" class="min-h-[38px] px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 active:bg-indigo-500/20 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 transition">Brubank</button>
+                        <button type="button" onclick="selectPaymentMethodChip('Transferencia')" class="min-h-[38px] px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 active:bg-indigo-500/20 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 transition">Transferencia</button>
+                        <button type="button" onclick="selectPaymentMethodChip('Efectivo')" class="min-h-[38px] px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 active:bg-indigo-500/20 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 transition">Efectivo</button>
+                        <button type="button" onclick="selectPaymentMethodChip('Débito Automático')" class="min-h-[38px] px-3 py-1.5 rounded-xl text-xs font-bold bg-slate-100 dark:bg-slate-800 active:bg-indigo-500/20 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 transition">Débito</button>
+                    </div>
+                    <input type="text" id="pay-note-input" placeholder="Ej: Pagado por Homebanking / Comprobante #..." class="w-full min-h-[48px] px-3.5 py-2.5 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                </div>
+
+                <div class="pt-2 flex items-center gap-2.5">
+                    <button type="button" onclick="closeSheet('pay-sheet-backdrop')" class="w-1/3 min-h-[52px] rounded-2xl font-bold text-xs text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 active:scale-95 transition">
+                        Cancelar
+                    </button>
+                    <button type="submit" class="w-2/3 min-h-[52px] rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm shadow-lg shadow-emerald-600/25 flex items-center justify-center gap-2 active:scale-95 transition">
+                        <i data-lucide="Check" class="w-5 h-5"></i>
+                        <span>Guardar Pago</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ==========================================
+         BOTTOM SHEET 2: AGREGAR / EDITAR SERVICIO
+         ========================================== -->
+    <div id="service-sheet-backdrop" onclick="handleBackdropClick(event, 'service-sheet-backdrop')" class="sheet-backdrop fixed inset-0 bg-slate-950/60 backdrop-blur-xs z-50 flex items-end justify-center">
+        <div class="bottom-sheet bg-white dark:bg-slate-900 w-full max-w-[480px] rounded-t-3xl border-t border-slate-200 dark:border-slate-800 px-5 pt-3 pb-safe-sheet shadow-2xl max-h-[92dvh] overflow-y-auto">
+            <!-- Handle bar -->
+            <div class="w-12 h-1.5 bg-slate-300 dark:bg-slate-700 rounded-full mx-auto mb-4"></div>
+
+            <div class="flex items-center justify-between mb-4">
+                <h3 id="service-sheet-title" class="text-base font-extrabold">Nuevo Pago Mensual</h3>
+                <button onclick="closeSheet('service-sheet-backdrop')" class="w-11 h-11 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 active:scale-95">
+                    <i data-lucide="X" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <form id="service-form" onsubmit="saveService(event)" class="space-y-4">
+                <input type="hidden" id="service-id-input">
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1.5">Nombre del servicio o impuesto *</label>
+                    <input type="text" id="service-name-input" required placeholder="Ej: Cuota de Natación, Monotributo, EPE..." class="w-full min-h-[48px] px-3.5 py-2.5 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1.5">Día que vence (1-31) *</label>
+                        <input type="number" inputmode="numeric" id="service-dueday-input" min="1" max="31" required placeholder="Ej: 20" oninput="updateIdealPreview()" class="w-full min-h-[48px] px-3.5 py-2.5 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1.5">Avisar días antes *</label>
+                        <input type="number" inputmode="numeric" id="service-advance-input" min="0" max="25" required value="4" oninput="updateIdealPreview()" class="w-full min-h-[48px] px-3.5 py-2.5 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                </div>
+
+                <!-- Preview dinámico de fecha ideal -->
+                <div id="ideal-date-preview" class="px-3.5 py-2.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 text-xs font-medium flex items-center gap-2">
+                    <i data-lucide="BellRing" class="w-4 h-4 shrink-0"></i>
+                    <span>Te vamos a sugerir pagarlo unos días antes por las dudas.</span>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1.5">Categoría</label>
+                        <select id="service-category-input" class="w-full min-h-[48px] px-3 py-2.5 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                            <option value="Impuestos">🏛️ Impuestos (ARCA/IIBB)</option>
+                            <option value="Deporte / Salud">🏊‍♀️ Deporte / Club</option>
+                            <option value="Hogar / Servicios">⚡ Hogar / Luz / Gas</option>
+                            <option value="Suscripciones">📱 Suscripciones</option>
+                            <option value="Tarjetas">💳 Tarjetas / Banco</option>
+                            <option value="Otro">📌 Otro</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1.5">Monto estimado ($)</label>
+                        <input type="number" step="0.01" inputmode="decimal" id="service-amount-input" placeholder="Opcional" class="w-full min-h-[48px] px-3.5 py-2.5 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1.5">Nota o recordatorio fijo</label>
+                    <input type="text" id="service-note-input" placeholder="Ej: Me gusta pagar unos días antes por las dudas" class="w-full min-h-[48px] px-3.5 py-2.5 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+
+                <div class="pt-3 border-t border-slate-200 dark:border-slate-800 flex flex-col gap-2.5">
+                    <div class="flex items-center gap-2.5">
+                        <button type="button" onclick="closeSheet('service-sheet-backdrop')" class="w-1/3 min-h-[52px] rounded-2xl font-bold text-xs text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 active:scale-95 transition">
+                            Cancelar
+                        </button>
+                        <button type="submit" class="w-2/3 min-h-[52px] rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm shadow-lg shadow-indigo-600/25 flex items-center justify-center gap-2 active:scale-95 transition">
+                            <i data-lucide="Save" class="w-4 h-4"></i>
+                            <span>Guardar Servicio</span>
+                        </button>
+                    </div>
+
+                    <button type="button" id="delete-service-btn" onclick="deleteCurrentService()" class="hidden w-full min-h-[46px] rounded-2xl text-rose-500 hover:bg-rose-500/10 font-bold text-xs items-center justify-center gap-1.5 active:scale-95 transition">
+                        <i data-lucide="Trash2" class="w-4 h-4"></i>
+                        <span>Eliminar este servicio</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ==========================================
+         BOTTOM SHEET 3: CONFIRMAR REINICIO DE MES
+         ========================================== -->
+    <div id="reset-sheet-backdrop" onclick="handleBackdropClick(event, 'reset-sheet-backdrop')" class="sheet-backdrop fixed inset-0 bg-slate-950/60 backdrop-blur-xs z-50 flex items-end justify-center">
+        <div class="bottom-sheet bg-white dark:bg-slate-900 w-full max-w-[480px] rounded-t-3xl border-t border-slate-200 dark:border-slate-800 px-5 pt-3 pb-safe-sheet shadow-2xl">
+            <div class="w-12 h-1.5 bg-slate-300 dark:bg-slate-700 rounded-full mx-auto mb-4"></div>
+            <div class="w-12 h-12 rounded-2xl bg-amber-500/15 text-amber-500 flex items-center justify-center mb-3">
+                <i data-lucide="CalendarSync" class="w-6 h-6"></i>
+            </div>
+            <h3 class="text-base font-extrabold">¿Cerrar mes y empezar uno nuevo?</h3>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1.5 leading-relaxed">
+                Los servicios que hayas marcado como <strong>Pagados</strong> se guardarán en la pestaña <strong>Historial</strong>, y todas las tarjetas volverán a quedar como <strong>Pendientes</strong> para el nuevo mes.
+            </p>
+            <div class="flex items-center gap-2.5 mt-5">
+                <button onclick="closeSheet('reset-sheet-backdrop')" class="w-1/2 min-h-[50px] rounded-2xl font-bold text-xs text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 active:scale-95 transition">
+                    Cancelar
+                </button>
+                <button onclick="executeManualReset()" class="w-1/2 min-h-[50px] rounded-2xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs active:scale-95 transition">
+                    Sí, iniciar nuevo mes
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==========================================
+         LÓGICA DE LA APLICACIÓN (JAVASCRIPT COMPLETO)
+         ========================================== -->
+    <script>
+        const STORAGE_KEYS = {
+            SERVICES: 'pagos_mensuales_servicios_v1',
+            LAST_MONTH: 'pagos_mensuales_ultimo_mes_v1',
+            HISTORY: 'pagos_mensuales_historial_v1',
+            THEME: 'pagos_mensuales_tema_v1'
+        };
+
+        // Tus 3 servicios precargados según tus fechas de vencimiento
+        const DEFAULT_SERVICES = [
+            {
+                id: 'srv-natacion',
+                name: 'Cuota de Natación',
+                dueDay: 5,
+                advanceDays: 4, // Avisa desde el día 1 ("primeros días del mes")
+                category: 'Deporte / Salud',
+                estimatedAmount: null,
+                note: 'Pagarla en los primeros días del mes',
+                paid: false,
+                paidDate: null,
+                paidAmount: null,
+                paidNote: ''
+            },
+            {
+                id: 'srv-iibb',
+                name: 'Ingresos Brutos (API / IIBB)',
+                dueDay: 16,
+                advanceDays: 3, // Fecha ideal desde el día 13
+                category: 'Impuestos',
+                estimatedAmount: null,
+                note: 'Se vence el 16 de cada mes',
+                paid: false,
+                paidDate: null,
+                paidAmount: null,
+                paidNote: ''
+            },
+            {
+                id: 'srv-monotributo',
+                name: 'Monotributo (ARCA)',
+                dueDay: 20,
+                advanceDays: 4, // Fecha ideal desde el día 16 ("unos días antes por las dudas")
+                category: 'Impuestos',
+                estimatedAmount: null,
+                note: 'Me gusta pagar unos días antes por las dudas',
+                paid: false,
+                paidDate: null,
+                paidAmount: null,
+                paidNote: ''
+            }
+        ];
+
+        let services = [];
+        let historyLog = [];
+        let currentFilter = 'all'; // 'all' | 'pending' | 'paid'
+        let currentMainView = 'pagos'; // 'pagos' | 'historial' | 'ajustes'
+        let simulatedDay = null; // null usa el día real del calendario
+
+        const MONTH_NAMES = [
+            'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+            'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+        ];
+
+        // Inicialización al cargar la app
+        document.addEventListener('DOMContentLoaded', () => {
+            initTheme();
+            loadData();
+            checkAutomaticMonthlyReset();
+            updateHeaderDate();
+            renderAll();
+        });
+
+        // ==========================================
+        // TEMA CLARO / OSCURO
+        // ==========================================
+        function initTheme() {
+            const savedTheme = localStorage.getItem(STORAGE_KEYS.THEME) || 'dark';
+            const htmlEl = document.documentElement;
+            const metaTheme = document.getElementById('meta-theme-color');
+            if (savedTheme === 'dark') {
+                htmlEl.classList.add('dark');
+                if (metaTheme) metaTheme.setAttribute('content', '#0f172a');
+            } else {
+                htmlEl.classList.remove('dark');
+                if (metaTheme) metaTheme.setAttribute('content', '#ffffff');
+            }
+            updateThemeIcon();
+        }
+
+        function toggleTheme() {
+            const htmlEl = document.documentElement;
+            const isDark = htmlEl.classList.toggle('dark');
+            localStorage.setItem(STORAGE_KEYS.THEME, isDark ? 'dark' : 'light');
+            const metaTheme = document.getElementById('meta-theme-color');
+            if (metaTheme) metaTheme.setAttribute('content', isDark ? '#0f172a' : '#ffffff');
+            updateThemeIcon();
+        }
+
+        function updateThemeIcon() {
+            const isDark = document.documentElement.classList.contains('dark');
+            const iconEl = document.getElementById('theme-icon');
+            if (iconEl) {
+                iconEl.setAttribute('data-lucide', isDark ? 'Sun' : 'Moon');
+                lucide.createIcons();
+            }
+        }
+
+        // ==========================================
+        // CARGA Y GUARDADO LOCAL (LOCALSTORAGE)
+        // ==========================================
+        function loadData() {
+            try {
+                const rawServices = localStorage.getItem(STORAGE_KEYS.SERVICES);
+                services = rawServices ? JSON.parse(rawServices) : JSON.parse(JSON.stringify(DEFAULT_SERVICES));
+                if (!rawServices) {
+                    localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify(services));
+                }
+
+                const rawHistory = localStorage.getItem(STORAGE_KEYS.HISTORY);
+                historyLog = rawHistory ? JSON.parse(rawHistory) : [];
+            } catch (e) {
+                console.error('Error cargando datos locales:', e);
+                services = JSON.parse(JSON.stringify(DEFAULT_SERVICES));
+                historyLog = [];
+            }
+        }
+
+        function saveData() {
+            localStorage.setItem(STORAGE_KEYS.SERVICES, JSON.stringify(services));
+            localStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify(historyLog));
+        }
+
+        // ==========================================
+        // CONTROL AUTOMÁTICO DE CAMBIO DE MES
+        // ==========================================
+        function getCurrentYearMonthKey() {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            return `${year}-${month}`;
+        }
+
+        function formatMonthKeyLabel(ymKey) {
+            if (!ymKey || !ymKey.includes('-')) return ymKey;
+            const [year, month] = ymKey.split('-');
+            const mIdx = parseInt(month, 10) - 1;
+            return `${MONTH_NAMES[mIdx] || month} ${year}`;
+        }
+
+        function checkAutomaticMonthlyReset() {
+            const currentYM = getCurrentYearMonthKey();
+            const savedYM = localStorage.getItem(STORAGE_KEYS.LAST_MONTH);
+
+            if (!savedYM) {
+                localStorage.setItem(STORAGE_KEYS.LAST_MONTH, currentYM);
+                return;
+            }
+
+            if (savedYM !== currentYM) {
+                // Archivar pagos del mes que terminó si hubo al menos un pago registrado
+                const anyPaid = services.some(s => s.paid);
+                if (anyPaid) {
+                    archiveMonthToHistory(formatMonthKeyLabel(savedYM));
+                }
+
+                // Reiniciar todos los servicios a pendiente para el nuevo mes
+                services = services.map(s => ({
+                    ...s,
+                    paid: false,
+                    paidDate: null,
+                    paidAmount: null,
+                    paidNote: ''
+                }));
+
+                localStorage.setItem(STORAGE_KEYS.LAST_MONTH, currentYM);
+                saveData();
+
+                // Mostrar aviso amigable de nuevo mes
+                const banner = document.getElementById('new-month-banner');
+                if (banner) banner.classList.remove('hidden');
+            }
+        }
+
+        function archiveMonthToHistory(monthLabel) {
+            const paidItems = services.filter(s => s.paid).map(s => ({
+                name: s.name,
+                category: s.category,
+                paidDate: s.paidDate,
+                paidAmount: s.paidAmount,
+                paidNote: s.paidNote
+            }));
+
+            const totalAmount = paidItems.reduce((acc, item) => acc + (Number(item.paidAmount) || 0), 0);
+
+            historyLog.unshift({
+                id: 'hist-' + Date.now(),
+                monthLabel: monthLabel,
+                archivedAt: new Date().toISOString(),
+                paidCount: paidItems.length,
+                totalServices: services.length,
+                totalAmount: totalAmount,
+                items: paidItems
+            });
+
+            // Mantener los últimos 24 meses en historial
+            if (historyLog.length > 24) {
+                historyLog = historyLog.slice(0, 24);
+            }
+        }
+
+        function closeNewMonthBanner() {
+            document.getElementById('new-month-banner').classList.add('hidden');
+        }
+
+        // ==========================================
+        // FECHA ACTUAL Y SIMULADOR DE DÍA
+        // ==========================================
+        function getActiveDayOfMonth() {
+            if (simulatedDay !== null) return simulatedDay;
+            return new Date().getDate();
+        }
+
+        function updateHeaderDate() {
+            const now = new Date();
+            const activeDay = getActiveDayOfMonth();
+            const monthName = MONTH_NAMES[now.getMonth()];
+            const year = now.getFullYear();
+
+            document.getElementById('header-month-title').textContent = `${monthName} ${year}`;
+            
+            const dateDisplay = document.getElementById('current-date-display');
+            const simBadge = document.getElementById('sim-badge');
+            const slider = document.getElementById('sim-day-slider');
+
+            if (simulatedDay !== null) {
+                dateDisplay.textContent = `Simulando día ${activeDay} de ${monthName}`;
+                simBadge.classList.remove('hidden');
+            } else {
+                dateDisplay.textContent = `Hoy es día ${activeDay} de ${monthName.toLowerCase()}`;
+                simBadge.classList.add('hidden');
+                if (slider) slider.value = activeDay;
+            }
+        }
+
+        function changeSimulatedDay(val) {
+            simulatedDay = parseInt(val, 10);
+            document.getElementById('sim-day-label').textContent = `Día ${simulatedDay} (Simulado)`;
+            updateHeaderDate();
+            renderAll();
+        }
+
+        function resetSimulatedDay() {
+            simulatedDay = null;
+            document.getElementById('sim-day-label').textContent = 'Hoy real';
+            updateHeaderDate();
+            renderAll();
+            showToast('Volviste a la fecha real de hoy');
+        }
+
+        // ==========================================
+        // CÁLCULO INTELIGENTE DE ESTADO DE CADA PAGO
+        // ==========================================
+        function getServiceStatus(service) {
+            if (service.paid) {
+                return {
+                    code: 'PAID',
+                    priority: 4,
+                    label: 'Pagado este mes',
+                    badgeClasses: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30',
+                    cardBorder: 'border-emerald-500/40 dark:border-emerald-500/30 bg-emerald-500/[0.03]',
+                    icon: 'CheckCircle2'
+                };
+            }
+
+            const today = getActiveDayOfMonth();
+            const due = Number(service.dueDay);
+            const adv = Number(service.advanceDays) || 0;
+            const idealStartDay = Math.max(1, due - adv);
+
+            // Caso 1: Ya pasó el día de vencimiento
+            if (today > due) {
+                const daysLate = today - due;
+                return {
+                    code: 'OVERDUE',
+                    priority: 0,
+                    label: `Venció hace ${daysLate} ${daysLate === 1 ? 'día' : 'días'} (el ${due})`,
+                    badgeClasses: 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30 animate-soft-pulse',
+                    cardBorder: 'border-rose-500/50 dark:border-rose-500/40',
+                    icon: 'AlertTriangle'
+                };
+            }
+
+            // Caso 2: Vence exactamente hoy
+            if (today === due) {
+                return {
+                    code: 'DUE_TODAY',
+                    priority: 1,
+                    label: `¡Vence hoy día ${due}!`,
+                    badgeClasses: 'bg-rose-500/20 text-rose-600 dark:text-rose-300 border-rose-500/40 animate-soft-pulse',
+                    cardBorder: 'border-rose-500/50 dark:border-rose-500/40',
+                    icon: 'Flame'
+                };
+            }
+
+            // Caso 3: Estamos dentro de la ventana de "Pagar unos días antes por las dudas"
+            if (today >= idealStartDay && today < due) {
+                const daysLeft = due - today;
+                return {
+                    code: 'IDEAL_WINDOW',
+                    priority: 2,
+                    label: `Fecha ideal para pagar (vence en ${daysLeft} ${daysLeft === 1 ? 'día' : 'días'})`,
+                    badgeClasses: 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30 animate-soft-pulse',
+                    cardBorder: 'border-amber-500/40 dark:border-amber-500/35',
+                    icon: 'Clock'
+                };
+            }
+
+            // Caso 4: Todavía falta para la ventana ideal
+            const daysUntilDue = due - today;
+            return {
+                code: 'UPCOMING',
+                priority: 3,
+                label: `Vence el día ${due} (faltan ${daysUntilDue} días)`,
+                badgeClasses: 'bg-slate-200/80 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-300/60 dark:border-slate-700',
+                cardBorder: 'border-slate-200 dark:border-slate-800',
+                icon: 'Calendar'
+            };
+        }
+
+        function getCategoryIcon(category) {
+            switch (category) {
+                case 'Deporte / Salud': return 'Waves';
+                case 'Impuestos': return 'Landmark';
+                case 'Hogar / Servicios': return 'Zap';
+                case 'Suscripciones': return 'Smartphone';
+                case 'Tarjetas': return 'CreditCard';
+                default: return 'Receipt';
+            }
+        }
+
+        // ==========================================
+        // RENDERIZADO PRINCIPAL
+        // ==========================================
+        function renderAll() {
+            renderSummaryAndTabs();
+            renderServicesList();
+            renderHistoryList();
+            lucide.createIcons();
+        }
+
+        function renderSummaryAndTabs() {
+            const total = services.length;
+            const paidServices = services.filter(s => s.paid);
+            const paidCount = paidServices.length;
+            const pendingCount = total - paidCount;
+            const pct = total > 0 ? Math.round((paidCount / total) * 100) : 0;
+
+            // Suma total abonada en el mes
+            const totalSpent = paidServices.reduce((sum, s) => sum + (Number(s.paidAmount) || 0), 0);
+
+            document.getElementById('progress-title').textContent = `${paidCount} de ${total} saldados este mes`;
+            document.getElementById('progress-percentage').textContent = `${pct}%`;
+            document.getElementById('progress-bar').style.width = `${pct}%`;
+            document.getElementById('total-spent-display').textContent = totalSpent > 0 ? `$${totalSpent.toLocaleString('es-AR')}` : '$0';
+
+            // Contador de alertas urgentes o en fecha ideal
+            const urgentEl = document.getElementById('urgent-counter');
+            if (total === 0) {
+                urgentEl.textContent = 'Agregá tu primer servicio mensual abajo.';
+            } else if (pendingCount === 0) {
+                urgentEl.innerHTML = '<span class="text-emerald-600 dark:text-emerald-400 font-bold">¡Excelente! Ya saldaste todos los pagos del mes.</span>';
+            } else {
+                let overdueOrToday = 0;
+                let idealNow = 0;
+                services.forEach(s => {
+                    const st = getServiceStatus(s);
+                    if (st.code === 'OVERDUE' || st.code === 'DUE_TODAY') overdueOrToday++;
+                    if (st.code === 'IDEAL_WINDOW') idealNow++;
+                });
+
+                if (overdueOrToday > 0) {
+                    urgentEl.innerHTML = `<span class="text-rose-500 font-bold">Atención: tenés ${overdueOrToday} ${overdueOrToday === 1 ? 'pago vencido o que vence hoy' : 'pagos vencidos o que vencen hoy'}.</span>`;
+                } else if (idealNow > 0) {
+                    urgentEl.innerHTML = `<span class="text-amber-600 dark:text-amber-400 font-bold">Sugerencia: tenés ${idealNow} ${idealNow === 1 ? 'pago en fecha ideal' : 'pagos en fecha ideal'} para ir saldando.</span>`;
+                } else {
+                    urgentEl.textContent = `Quedan ${pendingCount} pendientes, todavía con tiempo.`;
+                }
+            }
+
+            // Contadores en píldoras
+            document.getElementById('count-all').textContent = total;
+            document.getElementById('count-pending').textContent = pendingCount;
+            document.getElementById('count-paid').textContent = paidCount;
+
+            // Estilos de píldora activa
+            ['all', 'pending', 'paid'].forEach(tab => {
+                const btn = document.getElementById(`tab-${tab}`);
+                const badge = document.getElementById(`count-${tab}`);
+                if (currentFilter === tab) {
+                    btn.className = 'flex-1 min-h-[42px] px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 whitespace-nowrap bg-indigo-600 text-white shadow-sm shadow-indigo-500/25';
+                    badge.className = 'px-1.5 py-0.5 rounded-md text-[11px] bg-white/20 text-white';
+                } else {
+                    btn.className = 'flex-1 min-h-[42px] px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 whitespace-nowrap bg-slate-200/70 dark:bg-slate-800/80 text-slate-600 dark:text-slate-400';
+                    badge.className = 'px-1.5 py-0.5 rounded-md text-[11px] bg-slate-300/70 dark:bg-slate-700 text-slate-700 dark:text-slate-300';
+                }
+            });
+
+            // Punto indicador en Historial
+            const dot = document.getElementById('history-badge-dot');
+            if (dot) {
+                dot.classList.toggle('hidden', historyLog.length === 0);
+            }
+        }
+
+        function renderServicesList() {
+            const grid = document.getElementById('services-grid');
+            const emptyState = document.getElementById('empty-state');
+
+            // Filtrar según pestaña
+            let filtered = services.filter(s => {
+                if (currentFilter === 'pending') return !s.paid;
+                if (currentFilter === 'paid') return s.paid;
+                return true;
+            });
+
+            // Ordenar: Primero pendientes más urgentes/cercanos, luego pagados
+            filtered.sort((a, b) => {
+                const stA = getServiceStatus(a);
+                const stB = getServiceStatus(b);
+                if (stA.priority !== stB.priority) return stA.priority - stB.priority;
+                return Number(a.dueDay) - Number(b.dueDay);
+            });
+
+            if (filtered.length === 0) {
+                grid.innerHTML = '';
+                emptyState.classList.remove('hidden');
+                return;
+            }
+
+            emptyState.classList.add('hidden');
+
+            grid.innerHTML = filtered.map(service => {
+                const status = getServiceStatus(service);
+                const catIcon = getCategoryIcon(service.category);
+                const idealDay = Math.max(1, Number(service.dueDay) - (Number(service.advanceDays) || 0));
+
+                // Formateo de fecha en que se pagó
+                let formattedPaidDate = '';
+                if (service.paid && service.paidDate) {
+                    const parts = service.paidDate.split('-');
+                    if (parts.length === 3) {
+                        formattedPaidDate = `${parts[2]}/${parts[1]}/${parts[0]}`;
+                    } else {
+                        formattedPaidDate = service.paidDate;
+                    }
+                }
+
+                return `
+                <article class="bg-white dark:bg-slate-900 rounded-3xl p-4 border-2 ${status.cardBorder} shadow-xs transition-all">
+                    <!-- Fila superior: Ícono, Nombre y Botón Editar -->
+                    <div class="flex items-start justify-between gap-2.5">
+                        <div class="flex items-start gap-3 min-w-0">
+                            <div class="w-11 h-11 rounded-2xl ${service.paid ? 'bg-emerald-500/15 text-emerald-500' : 'bg-indigo-500/10 text-indigo-500 dark:text-indigo-400'} flex items-center justify-center shrink-0 mt-0.5">
+                                <i data-lucide="${service.paid ? 'CheckCheck' : catIcon}" class="w-5 h-5"></i>
+                            </div>
+                            <div class="min-w-0">
+                                <div class="flex items-center gap-1.5 flex-wrap">
+                                    <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">${escapeHtml(service.category || 'Servicio')}</span>
+                                    ${service.estimatedAmount && !service.paid ? `<span class="text-[11px] font-bold text-slate-500 dark:text-slate-400">• ~$${Number(service.estimatedAmount).toLocaleString('es-AR')}</span>` : ''}
+                                </div>
+                                <h2 class="text-base font-extrabold leading-snug truncate ${service.paid ? 'line-through text-slate-400 dark:text-slate-500' : 'text-slate-900 dark:text-white'}">
+                                    ${escapeHtml(service.name)}
+                                </h2>
+                            </div>
+                        </div>
+
+                        <button onclick="openServiceSheet('${service.id}')" aria-label="Editar servicio" class="w-10 h-10 rounded-xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center shrink-0 active:scale-95 transition">
+                            <i data-lucide="Settings2" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+
+                    <!-- Badge de Estado Inteligente y Fechas -->
+                    <div class="mt-3 flex flex-wrap items-center gap-2">
+                        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-bold border ${status.badgeClasses}">
+                            <i data-lucide="${status.icon}" class="w-3.5 h-3.5 shrink-0"></i>
+                            <span>${status.label}</span>
+                        </span>
+
+                        ${!service.paid && Number(service.advanceDays) > 0 ? `
+                        <span class="text-[11px] font-semibold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800/90 px-2.5 py-1 rounded-xl">
+                            Ideal pagar del ${idealDay} al ${service.dueDay}
+                        </span>
+                        ` : ''}
+                    </div>
+
+                    <!-- Nota personal fija del servicio -->
+                    ${service.note ? `
+                        <p class="mt-2.5 text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                            <i data-lucide="Info" class="w-3.5 h-3.5 shrink-0 text-slate-400"></i>
+                            <span>${escapeHtml(service.note)}</span>
+                        </p>
+                    ` : ''}
+
+                    <!-- Si YA ESTÁ PAGADO: Mostrar Comprobante / Resumen del pago y botón Deshacer -->
+                    ${service.paid ? `
+                        <div class="mt-3.5 pt-3 border-t border-slate-200/80 dark:border-slate-800/80 flex items-center justify-between gap-2">
+                            <div class="text-xs space-y-0.5">
+                                <div class="font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 flex-wrap">
+                                    <span>Saldado el ${formattedPaidDate}</span>
+                                    ${service.paidAmount ? `<span class="px-2 py-0.5 rounded-lg bg-emerald-500/15 font-extrabold">$${Number(service.paidAmount).toLocaleString('es-AR')}</span>` : ''}
+                                </div>
+                                ${service.paidNote ? `<p class="text-[11px] text-slate-500 dark:text-slate-400 font-medium">${escapeHtml(service.paidNote)}</p>` : ''}
+                            </div>
+
+                            <div class="flex items-center gap-1.5 shrink-0">
+                                <button onclick="openPaySheet('${service.id}')" class="min-h-[42px] px-3 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-bold flex items-center gap-1 active:scale-95 transition">
+                                    <i data-lucide="Pencil" class="w-3.5 h-3.5"></i>
+                                    <span>Editar</span>
+                                </button>
+                                <button onclick="undoPayment('${service.id}')" class="min-h-[42px] px-3 rounded-xl bg-rose-500/10 text-rose-600 dark:text-rose-400 text-xs font-bold flex items-center gap-1 active:scale-95 transition">
+                                    <i data-lucide="Undo2" class="w-3.5 h-3.5"></i>
+                                    <span>Deshacer</span>
+                                </button>
+                            </div>
+                        </div>
+                    ` : `
+                        <!-- Si ESTÁ PENDIENTE: Botón gigante 1-toque + Botón Detalle -->
+                        <div class="mt-4 flex items-center gap-2">
+                            <button onclick="quickPayToday('${service.id}')" class="flex-1 min-h-[48px] px-4 py-2.5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 active:bg-emerald-600 text-white font-bold text-xs shadow-sm shadow-indigo-500/20 flex items-center justify-center gap-2 active:scale-[0.98] transition">
+                                <i data-lucide="Check" class="w-4 h-4"></i>
+                                <span>Ya lo pagué hoy</span>
+                            </button>
+                            <button onclick="openPaySheet('${service.id}')" aria-label="Anotar pago con fecha o comprobante" class="min-h-[48px] px-3.5 py-2.5 rounded-2xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs flex items-center justify-center gap-1.5 active:scale-95 transition">
+                                <i data-lucide="FileText" class="w-4 h-4 text-indigo-500"></i>
+                                <span>Detalle</span>
+                            </button>
+                        </div>
+                    `}
+                </article>
+                `;
+            }).join('');
+        }
+
+        // ==========================================
+        // ACCIONES DE PAGO (1-TOQUE Y DETALLADO)
+        // ==========================================
+        function getTodayISOString() {
+            const now = new Date();
+            const y = now.getFullYear();
+            const m = String(now.getMonth() + 1).padStart(2, '0');
+            const d = String(getActiveDayOfMonth()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        }
+
+        function quickPayToday(serviceId) {
+            const idx = services.findIndex(s => s.id === serviceId);
+            if (idx === -1) return;
+
+            services[idx].paid = true;
+            services[idx].paidDate = getTodayISOString();
+            if (!services[idx].paidAmount && services[idx].estimatedAmount) {
+                services[idx].paidAmount = services[idx].estimatedAmount;
+            }
+
+            saveData();
+            renderAll();
+            showToast(`¡${services[idx].name} marcado como pagado!`);
+        }
+
+        function undoPayment(serviceId) {
+            const idx = services.findIndex(s => s.id === serviceId);
+            if (idx === -1) return;
+
+            services[idx].paid = false;
+            services[idx].paidDate = null;
+            services[idx].paidAmount = null;
+            services[idx].paidNote = '';
+
+            saveData();
+            renderAll();
+            showToast(`Volvió a quedar pendiente: ${services[idx].name}`);
+        }
+
+        function openPaySheet(serviceId) {
+            const service = services.find(s => s.id === serviceId);
+            if (!service) return;
+
+            document.getElementById('pay-service-id').value = service.id;
+            document.getElementById('pay-sheet-service-name').textContent = service.name;
+            document.getElementById('pay-date-input').value = service.paidDate || getTodayISOString();
+            document.getElementById('pay-amount-input').value = service.paidAmount || service.estimatedAmount || '';
+            document.getElementById('pay-note-input').value = service.paidNote || '';
+
+            openSheet('pay-sheet-backdrop');
+        }
+
+        function selectPaymentMethodChip(methodName) {
+            const input = document.getElementById('pay-note-input');
+            if (!input.value.trim()) {
+                input.value = `Pagado con ${methodName}`;
+            } else if (!input.value.includes(methodName)) {
+                input.value = `${methodName} - ${input.value}`;
+            }
+        }
+
+        function confirmPayment(event) {
+            event.preventDefault();
+            const id = document.getElementById('pay-service-id').value;
+            const idx = services.findIndex(s => s.id === id);
+            if (idx === -1) return;
+
+            const dateVal = document.getElementById('pay-date-input').value;
+            const amountVal = document.getElementById('pay-amount-input').value;
+            const noteVal = document.getElementById('pay-note-input').value.trim();
+
+            services[idx].paid = true;
+            services[idx].paidDate = dateVal || getTodayISOString();
+            services[idx].paidAmount = amountVal ? parseFloat(amountVal) : null;
+            services[idx].paidNote = noteVal;
+
+            saveData();
+            closeSheet('pay-sheet-backdrop');
+            renderAll();
+            showToast(`Pago guardado: ${services[idx].name}`);
+        }
+
+        // ==========================================
+        // CREAR / EDITAR / ELIMINAR SERVICIO
+        // ==========================================
+        function openServiceSheet(serviceId = null) {
+            const titleEl = document.getElementById('service-sheet-title');
+            const deleteBtn = document.getElementById('delete-service-btn');
+
+            if (serviceId) {
+                const srv = services.find(s => s.id === serviceId);
+                if (!srv) return;
+                titleEl.textContent = 'Editar Servicio';
+                document.getElementById('service-id-input').value = srv.id;
+                document.getElementById('service-name-input').value = srv.name;
+                document.getElementById('service-dueday-input').value = srv.dueDay;
+                document.getElementById('service-advance-input').value = srv.advanceDays ?? 4;
+                document.getElementById('service-category-input').value = srv.category || 'Otro';
+                document.getElementById('service-amount-input').value = srv.estimatedAmount || '';
+                document.getElementById('service-note-input').value = srv.note || '';
+                deleteBtn.classList.remove('hidden');
+                deleteBtn.classList.add('flex');
+            } else {
+                titleEl.textContent = 'Nuevo Pago Mensual';
+                document.getElementById('service-form').reset();
+                document.getElementById('service-id-input').value = '';
+                document.getElementById('service-advance-input').value = 4;
+                deleteBtn.classList.add('hidden');
+                deleteBtn.classList.remove('flex');
+            }
+
+            updateIdealPreview();
+            openSheet('service-sheet-backdrop');
+        }
+
+        function updateIdealPreview() {
+            const due = parseInt(document.getElementById('service-dueday-input').value, 10);
+            const adv = parseInt(document.getElementById('service-advance-input').value, 10) || 0;
+            const previewEl = document.getElementById('ideal-date-preview');
+
+            if (!isNaN(due) && due >= 1 && due <= 31) {
+                const idealDay = Math.max(1, due - adv);
+                if (adv > 0) {
+                    previewEl.innerHTML = `<i data-lucide="BellRing" class="w-4 h-4 shrink-0"></i><span>Vence el <strong>día ${due}</strong>. Te avisaremos como fecha ideal desde el <strong>día ${idealDay}</strong>.</span>`;
+                } else {
+                    previewEl.innerHTML = `<i data-lucide="BellRing" class="w-4 h-4 shrink-0"></i><span>Vence el <strong>día ${due}</strong> de cada mes (sin días de anticipación).</span>`;
+                }
+                lucide.createIcons();
+            }
+        }
+
+        function saveService(event) {
+            event.preventDefault();
+            const id = document.getElementById('service-id-input').value;
+            const name = document.getElementById('service-name-input').value.trim();
+            const dueDay = Math.min(31, Math.max(1, parseInt(document.getElementById('service-dueday-input').value, 10) || 10));
+            const advanceDays = Math.min(25, Math.max(0, parseInt(document.getElementById('service-advance-input').value, 10) || 0));
+            const category = document.getElementById('service-category-input').value;
+            const amountVal = document.getElementById('service-amount-input').value;
+            const note = document.getElementById('service-note-input').value.trim();
+
+            if (!name) return;
+
+            if (id) {
+                const idx = services.findIndex(s => s.id === id);
+                if (idx !== -1) {
+                    services[idx] = {
+                        ...services[idx],
+                        name,
+                        dueDay,
+                        advanceDays,
+                        category,
+                        estimatedAmount: amountVal ? parseFloat(amountVal) : null,
+                        note
+                    };
+                }
+                showToast('Servicio actualizado');
+            } else {
+                services.push({
+                    id: 'srv-' + Date.now(),
+                    name,
+                    dueDay,
+                    advanceDays,
+                    category,
+                    estimatedAmount: amountVal ? parseFloat(amountVal) : null,
+                    note,
+                    paid: false,
+                    paidDate: null,
+                    paidAmount: null,
+                    paidNote: ''
+                });
+                showToast('Nuevo servicio agregado');
+            }
+
+            saveData();
+            closeSheet('service-sheet-backdrop');
+            switchMainView('pagos');
+            renderAll();
+        }
+
+        function deleteCurrentService() {
+            const id = document.getElementById('service-id-input').value;
+            if (!id) return;
+            const srv = services.find(s => s.id === id);
+            services = services.filter(s => s.id !== id);
+            saveData();
+            closeSheet('service-sheet-backdrop');
+            renderAll();
+            if (srv) showToast(`Se eliminó ${srv.name}`);
+        }
+
+        // ==========================================
+        // HISTORIAL Y REINICIO MANUAL DE MES
+        // ==========================================
+        function renderHistoryList() {
+            const container = document.getElementById('history-list');
+            if (!container) return;
+
+            if (historyLog.length === 0) {
+                container.innerHTML = `
+                    <div class="bg-white dark:bg-slate-900 border border-dashed border-slate-300 dark:border-slate-800 rounded-3xl p-8 text-center">
+                        <div class="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center mx-auto mb-3">
+                            <i data-lucide="FolderClock" class="w-6 h-6"></i>
+                        </div>
+                        <h4 class="text-sm font-bold">Todavía no hay meses archivados</h4>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                            Cuando termine el mes (o si probás el reinicio desde Ajustes), acá vas a ver el resumen de todo lo que pagaste.
+                        </p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = historyLog.map(entry => `
+                <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-4 shadow-xs space-y-3">
+                    <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2.5">
+                        <div>
+                            <h4 class="text-sm font-extrabold capitalize">${escapeHtml(entry.monthLabel)}</h4>
+                            <p class="text-[11px] text-slate-500 dark:text-slate-400">${entry.paidCount} de ${entry.totalServices} servicios abonados</p>
+                        </div>
+                        ${entry.totalAmount > 0 ? `
+                            <span class="px-2.5 py-1 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-extrabold text-xs">
+                                $${Number(entry.totalAmount).toLocaleString('es-AR')}
+                            </span>
+                        ` : ''}
+                    </div>
+                    <div class="space-y-2">
+                        ${entry.items.length === 0 ? `<p class="text-xs text-slate-400 italic">Sin pagos registrados en ese cierre.</p>` : entry.items.map(item => `
+                            <div class="flex items-center justify-between text-xs gap-2">
+                                <div class="min-w-0">
+                                    <span class="font-bold text-slate-700 dark:text-slate-200">${escapeHtml(item.name)}</span>
+                                    ${item.paidNote ? `<span class="text-slate-400 block text-[11px] truncate">${escapeHtml(item.paidNote)}</span>` : ''}
+                                </div>
+                                <div class="text-right shrink-0">
+                                    <span class="text-slate-500 dark:text-slate-400 font-medium">${item.paidDate || ''}</span>
+                                    ${item.paidAmount ? `<span class="block font-bold text-emerald-600 dark:text-emerald-400">$${Number(item.paidAmount).toLocaleString('es-AR')}</span>` : ''}
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function openResetConfirmSheet() {
+            openSheet('reset-sheet-backdrop');
+        }
+
+        function executeManualReset() {
+            const now = new Date();
+            const label = `${MONTH_NAMES[now.getMonth()]} ${now.getFullYear()}`;
+            archiveMonthToHistory(label);
+
+            services = services.map(s => ({
+                ...s,
+                paid: false,
+                paidDate: null,
+                paidAmount: null,
+                paidNote: ''
+            }));
+
+            saveData();
+            closeSheet('reset-sheet-backdrop');
+            switchMainView('pagos');
+            renderAll();
+            showToast('Mes archivado en Historial. ¡Lista limpia!');
+        }
+
+        // ==========================================
+        // NAVEGACIÓN Y MODALES BOTTOM SHEET
+        // ==========================================
+        function setFilter(filterName) {
+            currentFilter = filterName;
+            renderAll();
+        }
+
+        function switchMainView(viewName) {
+            currentMainView = viewName;
+            const views = ['pagos', 'historial', 'ajustes'];
+            views.forEach(v => {
+                const section = document.getElementById(`view-${v}`);
+                const navBtn = document.getElementById(`nav-${v}`);
+                if (v === viewName) {
+                    section.classList.remove('hidden');
+                    navBtn.className = 'flex-1 min-h-[50px] py-1 flex flex-col items-center justify-center gap-1 text-indigo-600 dark:text-indigo-400 active:scale-95 transition relative';
+                } else {
+                    section.classList.add('hidden');
+                    navBtn.className = 'flex-1 min-h-[50px] py-1 flex flex-col items-center justify-center gap-1 text-slate-400 dark:text-slate-500 active:scale-95 transition relative';
+                }
+            });
+
+            // Mostrar u ocultar barra de progreso y filtros según estemos en Mis Pagos
+            const isPagos = viewName === 'pagos';
+            document.getElementById('header-progress-card').classList.toggle('hidden', !isPagos);
+            document.getElementById('header-filter-pills').classList.toggle('hidden', !isPagos);
+
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            lucide.createIcons();
+        }
+
+        function openSheet(backdropId) {
+            const el = document.getElementById(backdropId);
+            if (el) el.classList.add('open');
+        }
+
+        function closeSheet(backdropId) {
+            const el = document.getElementById(backdropId);
+            if (el) el.classList.remove('open');
+        }
+
+        function handleBackdropClick(event, backdropId) {
+            if (event.target.id === backdropId) {
+                closeSheet(backdropId);
+            }
+        }
+
+        // ==========================================
+        // EXPORTAR E IMPORTAR BACKUP (.JSON)
+        // ==========================================
+        function exportDataJSON() {
+            const backup = {
+                version: 1,
+                exportedAt: new Date().toISOString(),
+                services,
+                historyLog
+            };
+            const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `mis-pagos-backup-${getCurrentYearMonthKey()}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            showToast('Copia de seguridad descargada');
+        }
+
+        function importDataJSON(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const parsed = JSON.parse(e.target.result);
+                    if (Array.isArray(parsed.services)) {
+                        services = parsed.services;
+                        historyLog = Array.isArray(parsed.historyLog) ? parsed.historyLog : [];
+                        saveData();
+                        renderAll();
+                        switchMainView('pagos');
+                        showToast('¡Datos restaurados con éxito!');
+                    } else {
+                        showToast('El archivo no tiene el formato correcto');
+                    }
+                } catch (err) {
+                    showToast('Error al leer el archivo .json');
+                }
+            };
+            reader.readAsText(file);
+            event.target.value = '';
+        }
+
+        // ==========================================
+        // UTILIDADES (TOAST Y ESCAPE HTML)
+        // ==========================================
+        function showToast(message) {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-4 py-3 rounded-2xl shadow-xl text-xs font-bold flex items-center gap-2 border border-slate-700 dark:border-slate-200 transition-all duration-300 opacity-0 -translate-y-2';
+            toast.innerHTML = `<i data-lucide="CheckCircle2" class="w-4 h-4 text-emerald-400 dark:text-emerald-600 shrink-0"></i><span>${escapeHtml(message)}</span>`;
+            container.appendChild(toast);
+            lucide.createIcons();
+
+            requestAnimationFrame(() => {
+                toast.classList.remove('opacity-0', '-translate-y-2');
+            });
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0', '-translate-y-2');
+                setTimeout(() => toast.remove(), 300);
+            }, 2600);
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+    </script>
+</body>
+</html>
